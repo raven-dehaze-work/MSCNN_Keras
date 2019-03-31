@@ -16,6 +16,11 @@ def extract_src_imgs():
     提取原图
     :return:
     """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import scipy.io as sio
+    import h5py
+    import os
     f = h5py.File("nyu_depth_v2_labeled.mat")
     images = f["images"]
     images = np.array(images)
@@ -24,6 +29,7 @@ def extract_src_imgs():
     if not os.path.isdir(path_converted):
         os.makedirs(path_converted)
 
+    from PIL import Image
     images_number = []
     for i in range(len(images)):
         print(str(i) + '.jpg')
@@ -33,13 +39,12 @@ def extract_src_imgs():
         r = Image.fromarray(a[0]).convert('L')
         g = Image.fromarray(a[1]).convert('L')
         b = Image.fromarray(a[2]).convert('L')
-
         img = Image.merge("RGB", (r, g, b))
-        img = img.rotate(270)
+        img = img.transpose(Image.ROTATE_270)
 
-        iconpath = os.path.join(path_converted, str(i)+'.jpg')
+        iconpath = os.path.join(path_converted, str(i) + '.jpg')
         img.save(iconpath, optimize=True)
-    f.close()
+
 
 def extract_depth_imgs():
     """
@@ -63,9 +68,10 @@ def extract_depth_imgs():
         depths_img = Image.fromarray(np.uint8(depths[i]))
         depths_img = depths_img.transpose(Image.FLIP_LEFT_RIGHT)
 
-        iconpath = os.path.join(path_converted, str(i)+'.jpg')
+        iconpath = os.path.join(path_converted, str(i) + '.jpg')
         depths_img.save(iconpath, optimize=True)
     f.close()
+
 
 def generate_transmission_map():
     """
@@ -82,7 +88,7 @@ def generate_transmission_map():
     betas = np.random.rand(file_num) + 0.5
 
     for idx, file_name in enumerate(file_names):
-        print(str(idx)+".jpg")
+        print(str(idx) + ".jpg")
         # 得到图像的灰阶图
         img = Image.open(os.path.join(depth_dir, file_name))
         img_arr = np.array(img) / 255
@@ -91,8 +97,9 @@ def generate_transmission_map():
         trans_img = np.exp(-betas[idx] * img_arr)
 
         # 保存
-        trans_img = Image.fromarray(np.uint8(trans_img*255))
-        trans_img.save(os.path.join(trans_dir, str(idx)+'.jpg'))
+        trans_img = Image.fromarray(np.uint8(trans_img * 255))
+        trans_img.save(os.path.join(trans_dir, str(idx) + '.jpg'))
+
 
 def generate_clear_npy():
     """
@@ -105,10 +112,11 @@ def generate_clear_npy():
     file_names = [file for root, dirs, file in os.walk(clear_dir)][0]
 
     for idx, file_name in enumerate(file_names):
-        print(str(idx)+".jpg")
+        print(str(idx) + ".jpg")
         img = Image.open(os.path.join(clear_dir, file_name))
         img_arr = np.array(img)
-        np.save(os.path.join(npy_clear_dir,str(idx)+'.npy'),img_arr)
+        np.save(os.path.join(npy_clear_dir, str(idx) + '.npy'), img_arr)
+
 
 def generate_trans_npy():
     """
@@ -119,13 +127,42 @@ def generate_trans_npy():
     npy_trains_dir = './datasets/npy/transmission_maps'
 
     file_names = [file for root, dirs, file in os.walk(trans_dir)][0]
-    file_num = len(file_names)
 
     for idx, file_name in enumerate(file_names):
         print(str(idx) + ".jpg")
         img = Image.open(os.path.join(trans_dir, file_name))
         img_arr = np.array(img)
-        np.save(os.path.join(npy_trains_dir,str(idx)+'.npy'),img_arr)
+        np.save(os.path.join(npy_trains_dir, str(idx) + '.npy'), img_arr)
+
+
+def generate_haze_img_npy():
+    """
+    生成带雾图
+    :return:
+    """
+    npy_clear_dir = './datasets/npy/clear'
+    npy_trans_dir = './datasets/npy/transmission_maps'
+    npy_haze_dir = './datasets/npy/hazy'
+    npy_haze_image_dir = './datasets/image/hazy'
+
+    clear_file_names = [file for root, dirs, file in os.walk(npy_clear_dir)][0]
+    trans_file_name = [file for root, dirs, file in os.walk(npy_trans_dir)][0]
+
+    for idx, file_name in enumerate(clear_file_names):
+        clear_arr = np.load(os.path.join(npy_clear_dir, clear_file_names[idx])) / 255
+        trans_arr = np.load(os.path.join(npy_trans_dir, trans_file_name[idx])) / 255
+
+        A = np.random.rand() * 0.3 + 0.7
+
+        I = np.zeros((clear_arr.shape))
+        I[:, :, 0] = clear_arr[:, :, 0] * trans_arr + A * (1 - trans_arr)
+        I[:, :, 1] = clear_arr[:, :, 1] * trans_arr + A * (1 - trans_arr)
+        I[:, :, 2] = clear_arr[:, :, 2] * trans_arr + A * (1 - trans_arr)
+
+        # 保存为npy
+        np.save(os.path.join(npy_haze_dir, str(idx) + '.npy'), np.uint8(I * 255))
+        haze_img = Image.fromarray(np.uint8(I * 255))
+        haze_img.save(os.path.join(npy_haze_image_dir, str(idx) + '.jpg'))
 
 
 if __name__ == '__main__':
@@ -133,4 +170,6 @@ if __name__ == '__main__':
     # extract_depth_imgs()
     # generate_transmission_map()
     # generate_clear_npy()
-    generate_trans_npy()
+    # generate_trans_npy()
+
+    generate_haze_img_npy()
