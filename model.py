@@ -6,7 +6,7 @@ import os
 from keras.models import Model, Sequential
 from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input
 from keras.layers.merge import concatenate
-from keras.optimizers import Adam
+from keras.optimizers import Adam,SGD
 from keras.losses import mse
 import numpy as np
 import os
@@ -32,7 +32,7 @@ class MSCNN():
         self.epochs = epochs
 
         # 输入图片信息
-        self.img_height = 216
+        self.img_height = 320
         self.img_width = 240
         self.channel = 3
 
@@ -40,7 +40,7 @@ class MSCNN():
         (self.coarseModel, self.fineModel) = self.build_model()
 
         # 设置优化器，损失函数等
-        self.optimizer = Adam(learning_rate)
+        self.optimizer = SGD(learning_rate,0.9)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
