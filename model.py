@@ -3,19 +3,19 @@ MSCNN-Dehaze class
 """
 
 import os
-from keras.models import Model, Sequential
+from keras.models import Model
+from keras.callbacks import ModelCheckpoint
 from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input
 from keras.layers.merge import concatenate
 from keras.optimizers import Adam,SGD
 from keras.losses import mse
 import numpy as np
-import os
 import matplotlib.pyplot as plt
-from main import *
+
 
 
 class MSCNN():
-    def __init__(self) -> None:
+    def __init__(self,batch_size,epochs,learning_rate) -> None:
         super().__init__()
         # 模型保存地点
         self.model_dir_path = './model_save'
@@ -32,22 +32,28 @@ class MSCNN():
         self.epochs = epochs
 
         # 输入图片信息
-        self.img_height = 320
-        self.img_width = 240
+        self.img_height = 240
+        self.img_width = 320
         self.channel = 3
 
         # 建立模型
         (self.coarseModel, self.fineModel) = self.build_model()
 
+        # 保存回调函数
+        self.coarse_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path,self.coarse_model_path),monitor='val_loss',
+                                          verbose=1,save_best_only=True,mode='min' )
+        self.fine_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path, self.fine_model_path),
+                                           monitor='val_loss',
+                                           verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
-        self.optimizer = SGD(learning_rate,0.9)
+        self.optimizer = SGD(learning_rate,0.9,0.0001)
+        # self.optimizer = Adam(learning_rate)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
-                                 loss=self.loss, metrics=['accuracy'])
+                                 loss=self.loss)
         self.fineModel.compile(optimizer=self.optimizer,
-                               loss=self.loss,
-                               metrics=['accuracy'])
+                               loss=self.loss)
 
     def build_model(self):
         """
@@ -120,15 +126,62 @@ class MSCNN():
 
         return linear
 
-    def train(self, train_in, train_out, val_in, val_out):
+
+    def train_on_generator(self,train_datas,val_datas):
         """
-        训练模型
+        使用生成器来训练模型--适合大数据
+        :param train_datas: 字典类型的训练数据。包含训练数据总量和训练生成器。（键为：'nums'和'generator'
+        :param val_datas: 字典类型的验证数据。包含验证数据总量和验证生成器
+        :return: 无
+        """
+        train_num = train_datas['nums']
+        train_generator = train_datas['generator']
+
+        val_num = val_datas['nums']
+        val_genernator = val_datas['generator']
+
+        # 加载
+        if os.path.exists(os.path.join(self.model_dir_path,self.coarse_model_path)):
+            self.coarseModel.load_weights(os.path.join(self.model_dir_path,self.coarse_model_path))
+        if os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
+            self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
+
+        # 开始训练
+        coarse_history = self.coarseModel.fit_generator(generator=train_generator,steps_per_epoch=int(train_num/self.batch_size),epochs=self.epochs,
+                                       validation_data=val_genernator,validation_steps=max(int(val_num/self.batch_size),1),
+                                                        callbacks=[self.coarse_ckpt])
+        fine_history = self.fineModel.fit_generator(generator=train_generator,steps_per_epoch=int(train_num/self.batch_size),epochs=self.epochs,
+                                       validation_data=val_genernator,validation_steps=max(int(val_num/self.batch_size),1),
+                                                    callbacks=[self.fine_ckpt])
+
+        plt.subplot(1,2,1)
+        # 绘制训练 & 验证的损失值
+        plt.plot(coarse_history.history['loss'])
+        plt.plot(coarse_history.history['val_loss'])
+        plt.title('coarse model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Val'], loc='upper left')
+
+        plt.subplot(1,2,2)
+        plt.plot(fine_history.history['loss'])
+        plt.plot(fine_history.history['val_loss'])
+        plt.title('fine model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Val'], loc='upper left')
+        plt.show()
+
+    def train_on_datas(self, train_in, train_out, val_in, val_out):
+        """
+        使用数据训练模型--适合小数据
         :param train_in: 训练数据输入
         :param train_out: 训练数据输出
         :param val_in:  验证数据输入
         :param val_out: 验证数据输入
         :return:
         """
+
         samples_size = len(train_in)
         coarse_loss = 0.0
         fine_loss = 0.0
@@ -144,6 +197,7 @@ class MSCNN():
                 ################
                 # 训练
                 ################
+                # coarse_loss = self.coarseModel.fit()
                 coarse_loss = self.coarseModel.train_on_batch(batch_train_in, batch_train_out)
                 fine_loss = self.fineModel.train_on_batch(batch_train_in, batch_train_out)
 
@@ -158,7 +212,7 @@ class MSCNN():
                 self.coarseModel.save(os.path.join(self.model_dir_path,self.coarse_model_path))
                 self.fineModel.save(os.path.join(self.model_dir_path,self.fine_model_path))
 
-    def test(self,test_in):
+    def test_on_batch(self,test_in):
         """
         测试数据。
         :param test_in: 测试数据
@@ -168,21 +222,25 @@ class MSCNN():
         if not os.path.exists(os.path.join(self.model_dir_path,self.fine_model_path)):
             raise FileNotFoundError('model file not found, did you train model before?')
         self.fineModel.load_weights(os.path.join(self.model_dir_path,self.fine_model_path))
-        test_out = self.fineModel.predict(test_in)
+        test_out = self.fineModel.predict(test_in['haze']/255)
 
+        fig = plt.figure()
         # 保存对比照片
-
         for idx,img in enumerate(test_out):
-            fig, axs = plt.subplots(1, 2)
-            axs[0,0].imshow(test_in[idx])
-            axs[0,0].set_title('src')
-            axs[0,0].axis('off')
+            # fig, axs = plt.subplots(1, 2)
+            plt.subplot(1,2,1)
+            plt.imshow(np.reshape(test_in['trans'][idx]/255,(self.img_height,self.img_width)),cmap='gray')
+            plt.title('src')
+            # axs[0,0].imshow(test_in['trans'][idx]/255)
+            # axs[0,0].set_title('src')
+            # axs[0,0].axis('off')
 
-            axs[0, 1].imshow(img[idx])
-            axs[0, 1].set_title('dehazed img')
-            axs[0, 1].axis('off')
+            plt.subplot(1,2,2)
+            plt.imshow(np.reshape(img,(self.img_height,self.img_width)),cmap='gray')
+            plt.title('trans.img')
+            # plt.show()
+            # axs[0, 1].imshow(img)
+            # axs[0, 1].set_title('trans img')
+            # axs[0, 1].axis('off')
 
-            fig.savefig(os.path.join(self.dehazed_result_dir,'image%d.png'%(idx+1)))
-
-if __name__ == '__main__':
-    model = MSCNN()
+            fig.savefig(os.path.join(self.dehazed_result_dir,'image%d.jpg'%(idx)))

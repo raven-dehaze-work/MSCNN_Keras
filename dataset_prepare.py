@@ -9,6 +9,7 @@ import h5py
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
+from main import *
 
 
 def extract_src_imgs():
@@ -35,6 +36,8 @@ def extract_src_imgs():
         b = Image.fromarray(a[2]).convert('L')
         img = Image.merge("RGB", (r, g, b))
         img = img.transpose(Image.ROTATE_270)
+        img = img.resize((train_img_width,train_img_height))
+
 
         iconpath = os.path.join(path_converted, str(i) + '.jpg')
         img.save(iconpath, optimize=True)
@@ -61,6 +64,7 @@ def extract_depth_imgs():
         print(str(i) + '.jpg')
         depths_img = Image.fromarray(np.uint8(depths[i]))
         depths_img = depths_img.transpose(Image.FLIP_LEFT_RIGHT)
+        depths_img = depths_img.resize((train_img_width,train_img_height))
 
         iconpath = os.path.join(path_converted, str(i) + '.jpg')
         depths_img.save(iconpath, optimize=True)
@@ -180,10 +184,10 @@ def generate_npys():
     generate_haze_img_npy()
 
 if __name__ == '__main__':
-    # generate_imgs()
-    # generate_npys()
+    generate_imgs()
+    generate_npys()
 
     # 单独测试
     # generate_clear_npy()
     # generate_trans_npy()
-    generate_haze_img_npy()
+    # generate_haze_img_npy()
