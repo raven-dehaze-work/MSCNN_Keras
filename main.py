@@ -7,8 +7,8 @@ import os
 
 # 设置超参数
 learning_rate = 1e-03
-epochs = 50
-batch_size = 100
+epochs = 30
+batch_size = 50
 
 # 设置训练用的数据集图片大小
 train_img_height = 240
@@ -23,7 +23,7 @@ VAL_PERCENTAGE = 0.05
 
 # 训练数据目录
 train_haze_dir = './datasets/npy/hazy'
-train_trans_dir = './datasets/npy/transmission_maps'
+train_trans_dir = './datasets/npy/trans'
 
 
 def load_data_generator(train_percentage, val_percentage):
@@ -38,7 +38,9 @@ def load_data_generator(train_percentage, val_percentage):
     if train_percentage + val_percentage >= 1:
         raise Exception()
 
-    # 计算数据总量
+    # 计算数据总量t
+    tran
+
     haze_file_names = [file for root, dirs, file in os.walk(train_haze_dir)][0]
     # tran_file_names 在此脚本和haze_file_names是一样的，所以不需要重新计算
     trans_file_names = haze_file_names

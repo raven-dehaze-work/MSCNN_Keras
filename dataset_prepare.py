@@ -27,7 +27,7 @@ def extract_src_imgs():
 
     images_number = []
     for i in range(len(images)):
-        print(str(i) + '.jpg')
+        print(str(i) + '.png')
         images_number.append(images[i])
         a = np.array(images_number[i])
 
@@ -39,7 +39,7 @@ def extract_src_imgs():
         img = img.resize((train_img_width,train_img_height))
 
 
-        iconpath = os.path.join(path_converted, str(i) + '.jpg')
+        iconpath = os.path.join(path_converted, str(i) + '.png')
         img.save(iconpath, optimize=True)
     f.close()
 
@@ -61,23 +61,23 @@ def extract_depth_imgs():
     depths = depths.transpose((0, 2, 1))
 
     for i in range(len(depths)):
-        print(str(i) + '.jpg')
+        print(str(i) + '.png')
         depths_img = Image.fromarray(np.uint8(depths[i]))
         depths_img = depths_img.transpose(Image.FLIP_LEFT_RIGHT)
         depths_img = depths_img.resize((train_img_width,train_img_height))
 
-        iconpath = os.path.join(path_converted, str(i) + '.jpg')
+        iconpath = os.path.join(path_converted, str(i) + '.png')
         depths_img.save(iconpath, optimize=True)
     f.close()
 
 
-def generate_transmission_map():
+def generate_trans():
     """
     生成透射图
     :return:
     """
     depth_dir = './datasets/image/depth'
-    trans_dir = './datasets/image/transmission_maps'
+    trans_dir = './datasets/image/trans'
 
     # 获取所有景深图形文件名
     file_names = [file for root, dirs, file in os.walk(depth_dir)][0]
@@ -113,7 +113,7 @@ def generate_clear_npy():
         print(file_name)
         img = Image.open(os.path.join(clear_dir, file_name))
         img_arr = np.array(img)
-        np.save(os.path.join(npy_clear_dir, file_name.replace('.jpg','.npy')), img_arr)
+        np.save(os.path.join(npy_clear_dir, file_name.replace('.png','.npy')), img_arr)
 
 
 def generate_trans_npy():
@@ -121,8 +121,8 @@ def generate_trans_npy():
     生成透射图的npy文件，方便训练时直接提取
     :return:
     """
-    trans_dir = './datasets/image/transmission_maps'
-    npy_trans_dir = './datasets/npy/transmission_maps'
+    trans_dir = './datasets/image/trans'
+    npy_trans_dir = './datasets/npy/trans'
 
     file_names = [file for root, dirs, file in os.walk(trans_dir)][0]
 
@@ -130,16 +130,16 @@ def generate_trans_npy():
         print(file_name)
         img = Image.open(os.path.join(trans_dir, file_name))
         img_arr = np.array(img)
-        np.save(os.path.join(npy_trans_dir, file_name.replace('.jpg', '.npy')), img_arr)
+        np.save(os.path.join(npy_trans_dir, file_name.replace('.png', '.npy')), img_arr)
 
 
 def generate_haze_img_npy():
     """
-    生成带雾图的jpg图片和npy文件
+    生成带雾图的png图片和npy文件 -- 适用于有清晰图和透射图的时候进行合成
     :return:
     """
     npy_clear_dir = './datasets/npy/clear'
-    npy_trans_dir = './datasets/npy/transmission_maps'
+    npy_trans_dir = './datasets/npy/trans'
     npy_haze_dir = './datasets/npy/hazy'
     npy_haze_image_dir = './datasets/image/hazy'
 
@@ -162,8 +162,23 @@ def generate_haze_img_npy():
         np.save(os.path.join(npy_haze_dir, file_name), np.uint8(I * 255))
         haze_img = Image.fromarray(np.uint8(I * 255))
         # 保存图片
-        haze_img.save(os.path.join(npy_haze_image_dir, file_name.replace('.npy','.jpg')))
+        haze_img.save(os.path.join(npy_haze_image_dir, file_name.replace('.npy','.png')))
 
+def genernate_hazy_npy():
+    """
+    生成雾图的npy文件，方便后续训练时直接读取
+    :return:
+    """
+    hazy_img_file_dir ='./datasets/image/hazy'
+    hazy_npy_file_dir = './datasets/npy/hazy'
+
+    hazy_img_file_names = [file_name for root,dir,file_name in os.walk(hazy_img_file_dir)][0]
+
+    for idx, file_name in enumerate(hazy_img_file_names):
+        print(file_name)
+        img = Image.open(os.path.join(hazy_img_file_dir, file_name))
+        img_arr = np.array(img)
+        np.save(os.path.join(hazy_npy_file_dir, file_name.replace('.png', '.npy')), img_arr)
 
 def generate_imgs():
     """
@@ -172,7 +187,7 @@ def generate_imgs():
     """
     extract_src_imgs()
     extract_depth_imgs()
-    generate_transmission_map()
+    generate_trans()
 
 def generate_npys():
     """
@@ -181,11 +196,11 @@ def generate_npys():
     """
     generate_clear_npy()
     generate_trans_npy()
-    generate_haze_img_npy()
+    genernate_hazy_npy()
 
 if __name__ == '__main__':
-    generate_imgs()
-    generate_npys()
+    # generate_imgs()
+    genernate_hazy_npy()
 
     # 单独测试
     # generate_clear_npy()
