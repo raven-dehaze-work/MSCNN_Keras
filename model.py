@@ -3,51 +3,54 @@ MSCNN-Dehaze class
 """
 
 import os
+import time
+
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input
 from keras.layers.merge import concatenate
-from keras.optimizers import Adam,SGD
+from keras.optimizers import Adam, SGD
 from keras.losses import mse
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-
 class MSCNN():
-    def __init__(self,batch_size,epochs,learning_rate) -> None:
+    def __init__(self, batch_size, epochs, learning_rate) -> None:
         super().__init__()
         # 模型保存地点
         self.model_dir_path = './model_save'
-        self.dehazed_result_dir = './dehazed_result'
+        self.trans_img_dir = './dehazed_result/image/trans'
+        self.trans_npy_dir = './dehazed_result/npy/trans'
         if not os.path.exists(self.model_dir_path):
             os.mkdir(self.model_dir_path)
-        if not os.path.exists(self.dehazed_result_dir):
-            os.mkdir(self.dehazed_result_dir)
+        if not os.path.exists(self.trans_img_dir):
+            os.mkdir(self.trans_img_dir)
         self.coarse_model_path = 'coarse_net.h5'
-        self.fine_model_path = 'fineModel_net.h5'
+        self.fine_model_path = 'fine_net.h5'
 
         # 设置超参数
         self.batch_size = batch_size
         self.epochs = epochs
 
         # 输入图片信息
-        self.img_height = 240
-        self.img_width = 320
+        self.img_height = 230
+        self.img_width = 310
         self.channel = 3
 
         # 建立模型
         (self.coarseModel, self.fineModel) = self.build_model()
 
         # 保存回调函数
-        self.coarse_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path,self.coarse_model_path),monitor='val_loss',
-                                          verbose=1,save_best_only=True,mode='min' )
-        self.fine_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path, self.fine_model_path),
+        self.coarse_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path, 'coarse_net_{epoch:03d}-{val_loss:.4f}.h5'),
                                            monitor='val_loss',
                                            verbose=1, save_best_only=True, mode='min')
+        self.fine_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path,'fine_net_{epoch:03d}-{val_loss:.4f}.h5'),
+                                         monitor='val_loss',
+                                         verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
-        self.optimizer = SGD(learning_rate,0.9,0.0001)
-        # self.optimizer = Adam(learning_rate)
+        # self.optimizer = SGD(learning_rate,0.9,0.0001)
+        self.optimizer = Adam(learning_rate,decay=1e-6)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
@@ -74,8 +77,12 @@ class MSCNN():
         fineModel.summary()
 
         # save model to visualize
-        coarseModel.save(filepath=os.path.join(self.model_dir_path, self.coarse_model_path))
-        fineModel.save(filepath=os.path.join(self.model_dir_path, self.fine_model_path))
+        if not os.path.exists(os.path.join(self.model_dir_path, self.coarse_model_path)):
+            coarseModel.save(filepath=os.path.join(self.model_dir_path, self.coarse_model_path))
+            print('save corase net to visualize')
+        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
+            fineModel.save(filepath=os.path.join(self.model_dir_path, self.fine_model_path))
+            print('save fine net to visualize')
 
         return (coarseModel, fineModel)
 
@@ -126,8 +133,35 @@ class MSCNN():
 
         return linear
 
+    def _load_lastest_net(self):
+        """
+        加载最新训练好的模型，接力学习
+        :return:
+        """
+        file_names = [file_name for root, dir, file_name in os.walk(self.model_dir_path)][0]
+        # 加载最新的corase_net
+        coarse_file_names = list(filter(
+            lambda x: 'coarse_net' in x,
+            file_names
+        ))
+        fine_file_names = list(filter(
+            lambda x: 'fine_net' in x,
+            file_names
+        ))
 
-    def train_on_generator(self,train_datas,val_datas):
+        # 加载出来的文件列表的最后一个即是最新的模型model
+        if len(coarse_file_names) != 0:
+            print('lasteset coarse net %s' % coarse_file_names[-1])
+            self.coarseModel.load_weights(os.path.join(self.model_dir_path,coarse_file_names[-1]))
+        else:
+            print('not found coarse net weight file')
+        if len(fine_file_names) != 0:
+            print('lasteset fine net %s' % fine_file_names[-1])
+            self.fineModel.load_weights(os.path.join(self.model_dir_path,fine_file_names[-1]))
+        else:
+            print('not found fine net weight file')
+
+    def train_on_generator(self, train_datas, val_datas):
         """
         使用生成器来训练模型--适合大数据
         :param train_datas: 字典类型的训练数据。包含训练数据总量和训练生成器。（键为：'nums'和'generator'
@@ -140,30 +174,37 @@ class MSCNN():
         val_num = val_datas['nums']
         val_genernator = val_datas['generator']
 
-        # 加载
-        if os.path.exists(os.path.join(self.model_dir_path,self.coarse_model_path)):
-            self.coarseModel.load_weights(os.path.join(self.model_dir_path,self.coarse_model_path))
-        if os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
-            self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
+        # 加载模型
+        self._load_lastest_net()
 
         # 开始训练
-        coarse_history = self.coarseModel.fit_generator(generator=train_generator,steps_per_epoch=int(train_num/self.batch_size),epochs=self.epochs,
-                                       validation_data=val_genernator,validation_steps=max(int(val_num/self.batch_size),1),
-                                                        callbacks=[self.coarse_ckpt])
-        fine_history = self.fineModel.fit_generator(generator=train_generator,steps_per_epoch=int(train_num/self.batch_size),epochs=self.epochs,
-                                       validation_data=val_genernator,validation_steps=max(int(val_num/self.batch_size),1),
+        t1 = time.time()
+        # coarse_history = self.coarseModel.fit_generator(generator=train_generator,
+        #                                                 steps_per_epoch=int(train_num / self.batch_size),
+        #                                                 epochs=self.epochs,
+        #                                                 validation_data=val_genernator,
+        #                                                 validation_steps=max(int(val_num / self.batch_size), 1),
+        #                                                 callbacks=[self.coarse_ckpt])
+        t2 = time.time()
+        fine_history = self.fineModel.fit_generator(generator=train_generator,
+                                                    steps_per_epoch=int(train_num / self.batch_size),
+                                                    epochs=self.epochs,
+                                                    validation_data=val_genernator,
+                                                    validation_steps=max(int(val_num / self.batch_size), 1),
                                                     callbacks=[self.fine_ckpt])
-
-        plt.subplot(1,2,1)
+        t3 = time.time()
+        print('train coarse net speed %f s, train fine net spend %f s' % (t2 - t1, t3 - t2))
+        print('total time is %f' % t3 - t1)
+        plt.subplot(1, 2, 1)
         # 绘制训练 & 验证的损失值
-        plt.plot(coarse_history.history['loss'])
-        plt.plot(coarse_history.history['val_loss'])
-        plt.title('coarse model loss')
-        plt.ylabel('Loss')
-        plt.xlabel('Epoch')
-        plt.legend(['Train', 'Val'], loc='upper left')
+        # plt.plot(coarse_history.history['loss'])
+        # plt.plot(coarse_history.history['val_loss'])
+        # plt.title('coarse model loss')
+        # plt.ylabel('Loss')
+        # plt.xlabel('Epoch')
+        # plt.legend(['Train', 'Val'], loc='upper left')
 
-        plt.subplot(1,2,2)
+        plt.subplot(1, 2, 2)
         plt.plot(fine_history.history['loss'])
         plt.plot(fine_history.history['val_loss'])
         plt.title('fine model loss')
@@ -186,6 +227,9 @@ class MSCNN():
         coarse_loss = 0.0
         fine_loss = 0.0
         pre_best_val_loss = np.inf
+
+        # 加载模型
+        self._load_lastest_net()
         for i in range(self.epochs):
             print('%d/%d epochs' % (i + 1, self.epochs))
             start = 0
@@ -209,38 +253,56 @@ class MSCNN():
 
             if pre_best_val_loss < val_fine_loss:
                 # 保存当前模型
-                self.coarseModel.save(os.path.join(self.model_dir_path,self.coarse_model_path))
-                self.fineModel.save(os.path.join(self.model_dir_path,self.fine_model_path))
+                self.coarseModel.save(os.path.join(self.model_dir_path, self.coarse_model_path))
+                self.fineModel.save(os.path.join(self.model_dir_path, self.fine_model_path))
 
-    def test_on_batch(self,test_in):
+    def test_on_generator(self, test_datas):
+        """
+        generator 验证数据
+        :param test_datas:test_datas有两个键：nums和generator，分别对应测试数据集有多少个，以及相应的generator
+        :return:
+        """
+        # 加载模型
+        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
+            raise FileNotFoundError('model file not found, did you train model before?')
+        self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
+        test_out = self.fineModel.predict_generator(generator=test_datas['generator'],
+                                                    steps=test_datas['nums'] / self.batch_size)
+
+        fig = plt.figure()
+        # 保存照片
+        for idx, img in enumerate(test_out):
+            plt.imshow(np.reshape(img, (self.img_height, self.img_width)), cmap='gray')
+            plt.title('trans')
+
+            # save fig and  npy file
+            fig.savefig(os.path.join(self.trans_img_dir, 'image%d.png' % (idx)))
+            np.save(os.path.join(self.trans_npy_dir, 'image%d.npy' % idx), img * 255)
+
+    def test_on_batch(self, test_in):
         """
         测试数据。
         :param test_in: 测试数据
         :return: 无
         """
         # 加载模型
-        if not os.path.exists(os.path.join(self.model_dir_path,self.fine_model_path)):
+        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
             raise FileNotFoundError('model file not found, did you train model before?')
-        self.fineModel.load_weights(os.path.join(self.model_dir_path,self.fine_model_path))
-        test_out = self.fineModel.predict(test_in['haze']/255)
+        self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
+        test_out = self.fineModel.predict(test_in['haze'])
 
         fig = plt.figure()
         # 保存对比照片
-        for idx,img in enumerate(test_out):
+        for idx, img in enumerate(test_out):
             # fig, axs = plt.subplots(1, 2)
-            plt.subplot(1,2,1)
-            plt.imshow(np.reshape(test_in['trans'][idx]/255,(self.img_height,self.img_width)),cmap='gray')
+            plt.subplot(1, 2, 1)
+            plt.imshow(np.reshape(test_in['trans'][idx], (self.img_height, self.img_width)), cmap='gray')
             plt.title('src')
-            # axs[0,0].imshow(test_in['trans'][idx]/255)
-            # axs[0,0].set_title('src')
-            # axs[0,0].axis('off')
 
-            plt.subplot(1,2,2)
-            plt.imshow(np.reshape(img,(self.img_height,self.img_width)),cmap='gray')
+            plt.subplot(1, 2, 2)
+            plt.imshow(np.reshape(img, (self.img_height, self.img_width)), cmap='gray')
             plt.title('trans.img')
-            # plt.show()
-            # axs[0, 1].imshow(img)
-            # axs[0, 1].set_title('trans img')
-            # axs[0, 1].axis('off')
 
-            fig.savefig(os.path.join(self.dehazed_result_dir,'image%d.jpg'%(idx)))
+            # save fig and npy
+            fig.savefig(os.path.join(self.trans_img_dir, 'image%d.png' % (idx)))
+            np.save(os.path.join(self.trans_npy_dir, 'image%d.npy' % idx), img * 255)

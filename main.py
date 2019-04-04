@@ -4,21 +4,23 @@ main program for MSCNN-Dehazing
 from model import MSCNN
 import numpy as np
 import os
+import utils
+import matplotlib.pyplot as plt
 
 # 设置超参数
 learning_rate = 1e-03
-epochs = 30
-batch_size = 50
+epochs = 100
+batch_size = 130
 
 # 设置训练用的数据集图片大小
-train_img_height = 240
-train_img_width = 320
+train_img_height = 230
+train_img_width = 310
 
 # mode: 当前程序是train还是test。默认train
 mode = 'train'  # or 'test'
 
 # 数据集合所占用比例
-TRAIN_PERCENTAGE = 0.9
+TRAIN_PERCENTAGE = 0.94
 VAL_PERCENTAGE = 0.05
 
 # 训练数据目录
@@ -39,11 +41,9 @@ def load_data_generator(train_percentage, val_percentage):
         raise Exception()
 
     # 计算数据总量t
-    tran
-
-    haze_file_names = [file for root, dirs, file in os.walk(train_haze_dir)][0]
-    # tran_file_names 在此脚本和haze_file_names是一样的，所以不需要重新计算
-    trans_file_names = haze_file_names
+    trans_hazy_pair = utils.load_training_data_pair()
+    haze_file_names = trans_hazy_pair['hazy']
+    trans_file_names = trans_hazy_pair['trans']
     file_nums = len(haze_file_names)
     print("total file numbers is %d" % file_nums)
 
@@ -85,23 +85,22 @@ def _get_generator(x_names, y_names, batch_size, start_pos, nums):
     :return: 生成器
     """
     total_nums = len(x_names)
-    if total_nums <= start_pos + nums:
+    if total_nums < start_pos + nums:
         raise Exception('start_pos + nums > total_nums, overflow the training data number')
 
     x_datas = np.zeros((batch_size, train_img_height, train_img_width, 3))
     y_datas = np.zeros((batch_size, train_img_height, train_img_width, 1))
-
     while True:
         for idx in range(nums):
-            x_data = np.load(os.path.join(train_haze_dir, x_names[start_pos + idx]))
-            y_data = np.expand_dims(np.load(os.path.join(train_trans_dir, y_names[start_pos + idx])), 2)
+            x_data = np.load(os.path.join(train_haze_dir, x_names[start_pos + idx])) / 255
+            y_data = np.expand_dims(np.load(os.path.join(train_trans_dir, y_names[start_pos + idx])), 2) / 255
 
             x_datas[idx % batch_size] = x_data
             y_datas[idx % batch_size] = y_data
             if (idx + 1) % batch_size == 0:
-                yield x_datas,y_datas
+                yield x_datas, y_datas
         if nums < batch_size:
-            yield  x_datas[0:nums],y_datas[0:nums]
+            yield x_datas[0:nums], y_datas[0:nums]
 
 
 def load_datas(train_percentage, val_percentage):
@@ -116,7 +115,10 @@ def load_datas(train_percentage, val_percentage):
         raise Exception("percentage of train and val overflow!!!")
 
     # 计算数据总量
-    haze_file_names = [file for root, dirs, file in os.walk(train_haze_dir)][0]
+    trans_hazy_pair = utils.load_training_data_pair()
+    haze_file_names = trans_hazy_pair['hazy']
+    trans_file_names = trans_hazy_pair['trans']
+
     file_nums = len(haze_file_names)
     print("total file numbers is %d" % file_nums)
 
@@ -143,14 +145,16 @@ def load_datas(train_percentage, val_percentage):
         if idx < train_nums:
             train_datas['haze'][idx] = np.load(os.path.join(train_haze_dir, file_name))
             # 由于透射图是在保存时是2维，但是在训练时需要3维数据，所以需要补充一维
-            train_datas['trans'][idx] = np.expand_dims(np.load(os.path.join(train_trans_dir, file_name)), 2)
+            train_datas['trans'][idx] = np.expand_dims(np.load(
+                os.path.join(train_trans_dir, trans_file_names[idx])), 2)
         elif idx < train_nums + val_nums:
             val_datas['haze'][idx - train_nums] = np.load(os.path.join(train_haze_dir, file_name))
-            val_datas['trans'][idx - train_nums] = np.expand_dims(np.load(os.path.join(train_trans_dir, file_name)), 2)
+            val_datas['trans'][idx - train_nums] = np.expand_dims(np.load(
+                os.path.join(train_trans_dir, trans_file_names[idx])), 2)
         else:
             test_datas['haze'][idx - train_nums - val_nums] = np.load(os.path.join(train_haze_dir, file_name))
-            test_datas['trans'][idx - train_nums - val_nums] = np.expand_dims(
-                np.load(os.path.join(train_trans_dir, file_name)), 2)
+            test_datas['trans'][idx - train_nums - val_nums] = np.expand_dims(np.load(
+                os.path.join(train_trans_dir, trans_file_names[idx])), 2)
 
     # 打印测试是否转化成功
     print('train_datas shape', train_datas['haze'].shape)
@@ -185,18 +189,15 @@ def get_airlight(trans_map, J):
     return A
 
 
-
-
 if __name__ == '__main__':
+    # 建立模型
+    mscnn = MSCNN(batch_size, epochs, learning_rate)
     # 载入训练数据
     (train_datas, val_datas, test_datas) = load_data_generator(TRAIN_PERCENTAGE, VAL_PERCENTAGE)
 
-    # 建立模型
-    mscnn = MSCNN(batch_size, epochs, learning_rate)
-
-    # train
-    mscnn.train_on_generator(train_datas,val_datas)
-
-    # test
-    (_,_,test_datas) = load_datas(TRAIN_PERCENTAGE,VAL_PERCENTAGE)
-    mscnn.test_on_batch(test_datas)
+    if mode == 'train':
+        # train
+        mscnn.train_on_generator(train_datas, val_datas)
+    elif mode == 'test':
+        # test
+        mscnn.test_on_generator(test_datas)

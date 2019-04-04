@@ -112,6 +112,7 @@ def generate_clear_npy():
     for idx, file_name in enumerate(file_names):
         print(file_name)
         img = Image.open(os.path.join(clear_dir, file_name))
+        img = img.resize((train_img_width,train_img_height))
         img_arr = np.array(img)
         np.save(os.path.join(npy_clear_dir, file_name.replace('.png','.npy')), img_arr)
 
@@ -129,6 +130,7 @@ def generate_trans_npy():
     for idx, file_name in enumerate(file_names):
         print(file_name)
         img = Image.open(os.path.join(trans_dir, file_name))
+        img = img.resize((train_img_width, train_img_height))
         img_arr = np.array(img)
         np.save(os.path.join(npy_trans_dir, file_name.replace('.png', '.npy')), img_arr)
 
@@ -177,6 +179,7 @@ def genernate_hazy_npy():
     for idx, file_name in enumerate(hazy_img_file_names):
         print(file_name)
         img = Image.open(os.path.join(hazy_img_file_dir, file_name))
+        img = img.resize((train_img_width, train_img_height))
         img_arr = np.array(img)
         np.save(os.path.join(hazy_npy_file_dir, file_name.replace('.png', '.npy')), img_arr)
 
@@ -200,7 +203,7 @@ def generate_npys():
 
 if __name__ == '__main__':
     # generate_imgs()
-    genernate_hazy_npy()
+    generate_npys()
 
     # 单独测试
     # generate_clear_npy()
