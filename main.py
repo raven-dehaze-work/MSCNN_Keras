@@ -8,9 +8,9 @@ import utils
 import matplotlib.pyplot as plt
 
 # 设置超参数
-learning_rate = 1e-03
-epochs = 100
-batch_size = 130
+learning_rate = 1e-04
+epochs = 10
+batch_size = 80
 
 # 设置训练用的数据集图片大小
 train_img_height = 230
@@ -98,6 +98,8 @@ def _get_generator(x_names, y_names, batch_size, start_pos, nums):
             x_datas[idx % batch_size] = x_data
             y_datas[idx % batch_size] = y_data
             if (idx + 1) % batch_size == 0:
+                # 打印一下检验是否配对
+                # print('\n',x_names[start_pos + idx],y_names[start_pos + idx])
                 yield x_datas, y_datas
         if nums < batch_size:
             yield x_datas[0:nums], y_datas[0:nums]

@@ -7,7 +7,7 @@ import time
 
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input
+from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input,BatchNormalization
 from keras.layers.merge import concatenate
 from keras.optimizers import Adam, SGD
 from keras.losses import mse
@@ -95,12 +95,14 @@ class MSCNN():
         conv1 = Conv2D(5, (11, 11), padding='same', activation='relu', name='coarseNet/conv1')(input_img)
         pool1 = MaxPooling2D((2, 2), name='coarseNet/pool1')(conv1)
         upsample1 = UpSampling2D((2, 2), name='coarseNet/upsample1')(pool1)
+        normalize1 = BatchNormalization(axis=3,name='coarseNet/bn1')(upsample1)
 
-        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(upsample1)
+        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(normalize1)
         pool2 = MaxPooling2D((2, 2), name='coarseNet/pool2')(conv2)
         upsample2 = UpSampling2D((2, 2), name='coarseNet/upsample2')(pool2)
+        normalize2 = BatchNormalization(axis=3, name='coarseNet/bn2')(upsample2)
 
-        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(upsample2)
+        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(normalize2)
         pool3 = MaxPooling2D((2, 2), name='coarseNet/pool3')(conv3)
         upsample3 = UpSampling2D((2, 2), name='coarseNet/upsample3')(pool3)
 
@@ -120,12 +122,14 @@ class MSCNN():
 
         # 级联coarseNet
         concat = concatenate([upsample1, coarseNet], axis=3, name='concat')
+        normalize1 = BatchNormalization(axis=3, name='fineNet/bn1')(concat)
 
-        conv2 = Conv2D(5, (5, 5), padding='same', name='fineNet/conv2')(concat)
+        conv2 = Conv2D(5, (5, 5), padding='same', name='fineNet/conv2')(normalize1)
         pool2 = MaxPooling2D((2, 2), name='fineNet/pool2')(conv2)
         upsample2 = UpSampling2D((2, 2), name='fineNet/upsample2')(pool2)
+        normalize2 = BatchNormalization(axis=3, name='fineNet/bn2')(upsample2)
 
-        conv3 = Conv2D(10, (3, 3), padding='same', name='fineNet/conv3')(upsample2)
+        conv3 = Conv2D(10, (3, 3), padding='same', name='fineNet/conv3')(normalize2)
         pool3 = MaxPooling2D((2, 2), name='fineNet/pool3')(conv3)
         upsample3 = UpSampling2D((2, 2), name='fineNet/upsample3')(pool3)
 
@@ -179,12 +183,12 @@ class MSCNN():
 
         # 开始训练
         t1 = time.time()
-        # coarse_history = self.coarseModel.fit_generator(generator=train_generator,
-        #                                                 steps_per_epoch=int(train_num / self.batch_size),
-        #                                                 epochs=self.epochs,
-        #                                                 validation_data=val_genernator,
-        #                                                 validation_steps=max(int(val_num / self.batch_size), 1),
-        #                                                 callbacks=[self.coarse_ckpt])
+        coarse_history = self.coarseModel.fit_generator(generator=train_generator,
+                                                        steps_per_epoch=int(train_num / self.batch_size),
+                                                        epochs=self.epochs,
+                                                        validation_data=val_genernator,
+                                                        validation_steps=max(int(val_num / self.batch_size), 1),
+                                                        callbacks=[self.coarse_ckpt])
         t2 = time.time()
         fine_history = self.fineModel.fit_generator(generator=train_generator,
                                                     steps_per_epoch=int(train_num / self.batch_size),
@@ -193,16 +197,17 @@ class MSCNN():
                                                     validation_steps=max(int(val_num / self.batch_size), 1),
                                                     callbacks=[self.fine_ckpt])
         t3 = time.time()
-        print('train coarse net speed %f s, train fine net spend %f s' % (t2 - t1, t3 - t2))
-        print('total time is %f' % t3 - t1)
-        plt.subplot(1, 2, 1)
+        print('train coarse net spend %f s, train fine net spend %f s' % (t2 - t1, t3 - t2))
+        print('total time is %f' % (t3 - t1))
+
         # 绘制训练 & 验证的损失值
-        # plt.plot(coarse_history.history['loss'])
-        # plt.plot(coarse_history.history['val_loss'])
-        # plt.title('coarse model loss')
-        # plt.ylabel('Loss')
-        # plt.xlabel('Epoch')
-        # plt.legend(['Train', 'Val'], loc='upper left')
+        plt.subplot(1, 2, 1)
+        plt.plot(coarse_history.history['loss'])
+        plt.plot(coarse_history.history['val_loss'])
+        plt.title('coarse model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Val'], loc='upper left')
 
         plt.subplot(1, 2, 2)
         plt.plot(fine_history.history['loss'])
@@ -263,16 +268,14 @@ class MSCNN():
         :return:
         """
         # 加载模型
-        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
-            raise FileNotFoundError('model file not found, did you train model before?')
-        self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
+        self._load_lastest_net()
         test_out = self.fineModel.predict_generator(generator=test_datas['generator'],
                                                     steps=test_datas['nums'] / self.batch_size)
 
         fig = plt.figure()
         # 保存照片
         for idx, img in enumerate(test_out):
-            plt.imshow(np.reshape(img, (self.img_height, self.img_width)), cmap='gray')
+            plt.imshow(np.reshape(img*255, (self.img_height, self.img_width)), cmap='gray')
             plt.title('trans')
 
             # save fig and  npy file
