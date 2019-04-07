@@ -50,7 +50,7 @@ class MSCNN():
                                          verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
         # self.optimizer = SGD(learning_rate,0.9,0.0001)
-        self.optimizer = Adam(learning_rate,decay=1e-5)
+        self.optimizer = Adam(learning_rate,decay=1e-6)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
@@ -160,10 +160,9 @@ class MSCNN():
         ))
 
         # 加载出来的文件列表的最后一个即是最新的模型model
-        # 注意在训练过程中coarse net 和 fine net 的加载顺序可能会造成权重的覆盖问题
         if len(coarse_file_names) != 0:
             print('lasteset coarse net %s' % coarse_file_names[-1])
-            self.coarseModel.load_weights(os.path.join(self.model_dir_path, coarse_file_names[-1]))
+            self.coarseModel.load_weights(os.path.join(self.model_dir_path,coarse_file_names[-1]))
         else:
             print('not found coarse net weight file')
         if len(fine_file_names) != 0:
@@ -171,8 +170,6 @@ class MSCNN():
             self.fineModel.load_weights(os.path.join(self.model_dir_path,fine_file_names[-1]))
         else:
             print('not found fine net weight file')
-
-
 
     def train_on_generator(self, train_datas, val_datas):
         """
@@ -192,12 +189,12 @@ class MSCNN():
 
         # 开始训练
         t1 = time.time()
-        # coarse_history = self.coarseModel.fit_generator(generator=train_generator,
-        #                                                 steps_per_epoch=int(train_num / self.batch_size),
-        #                                                 epochs=self.epochs,
-        #                                                 validation_data=val_genernator,
-        #                                                 validation_steps=max(int(val_num / self.batch_size), 1),
-        #                                                 callbacks=[self.coarse_ckpt])
+        coarse_history = self.coarseModel.fit_generator(generator=train_generator,
+                                                        steps_per_epoch=int(train_num / self.batch_size),
+                                                        epochs=self.epochs,
+                                                        validation_data=val_genernator,
+                                                        validation_steps=max(int(val_num / self.batch_size), 1),
+                                                        callbacks=[self.coarse_ckpt])
         t2 = time.time()
         fine_history = self.fineModel.fit_generator(generator=train_generator,
                                                     steps_per_epoch=int(train_num / self.batch_size),
@@ -210,13 +207,13 @@ class MSCNN():
         print('total time is %f' % (t3 - t1))
 
         # 绘制训练 & 验证的损失值
-        # plt.subplot(1, 2, 1)
-        # plt.plot(coarse_history.history['loss'])
-        # plt.plot(coarse_history.history['val_loss'])
-        # plt.title('coarse model loss')
-        # plt.ylabel('Loss')
-        # plt.xlabel('Epoch')
-        # plt.legend(['Train', 'Val'], loc='upper left')
+        plt.subplot(1, 2, 1)
+        plt.plot(coarse_history.history['loss'])
+        plt.plot(coarse_history.history['val_loss'])
+        plt.title('coarse model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Val'], loc='upper left')
 
         plt.subplot(1, 2, 2)
         plt.plot(fine_history.history['loss'])
