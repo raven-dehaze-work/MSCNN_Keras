@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# user define
+.idea
+test.py
+datasets/
+dehazed_result/
+reside_datasets/
+model_save - 副本/

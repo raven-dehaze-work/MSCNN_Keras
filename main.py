@@ -8,16 +8,17 @@ import utils
 import matplotlib.pyplot as plt
 
 # 设置超参数
-learning_rate = 1e-04
-epochs = 10
-batch_size = 80
+learning_rate = 1e-03
+# 在epochs = 10 batch_size = 80的情况下，大概要跑40分钟
+epochs = 40
+batch_size = 60
 
 # 设置训练用的数据集图片大小
 train_img_height = 230
 train_img_width = 310
 
 # mode: 当前程序是train还是test。默认train
-mode = 'train'  # or 'test'
+mode = 'test'  # or 'test'
 
 # 数据集合所占用比例
 TRAIN_PERCENTAGE = 0.94

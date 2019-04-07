@@ -1,12 +1,17 @@
 """
 测试文件--用于开发过程中的各项功能测试
+1. 所有npy 文件均为255 文件
+2. hazy文件的末尾数字为大气光
+3. keras的模型save和load是有效的
+4. reside ITS数据库 trans和hazy是相对应的
 """
 
 import utils
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-
+from keras.models import Sequential,Model
+from keras.layers import Dense,Input
 
 def _get_airlight(file_name):
     """
@@ -19,47 +24,26 @@ def _get_airlight(file_name):
     return float(file_name[s_idx-1:e_idx+s_idx+1])
 
 if __name__ == '__main__':
-    """
-    验证数据集的trans和hazy还原效果
-    """
-    trans_dir = './datasets/npy/trans'
-    hazy_dir = './datasets/npy/hazy'
+    # 随机生成x和y
+    x = np.linspace(-1,1,100*1000).reshape((100*1000,-1))
+    y = 0.5 * x + 0.1 + np.random.normal(0,0.01,x.shape)
+    x_test = [0.4]
 
-    trans_hazy_pairs = utils.load_training_data_pair()
-    trans = trans_hazy_pairs['trans']
-    hazys = trans_hazy_pairs['hazy']
+    # 构建MLP网络
+    z = Input((1,))
+    layer1 = Dense(500)(z)
+    out = Dense(1)(layer1)
+    model = Model(inputs=z,outputs=out)
 
-    # 删除 pairs 释放内存
-    del trans_hazy_pairs
+    # 编译网络
+    model.summary()
+    model.compile(optimizer='sgd', loss='mse')
 
-    # 要测试第几张图片
-    num_idx = 13000
+    # 训练
+    # model.fit(x,y,256,epochs=10)
 
-    # 测试一张图片
-    test_trans_file_path = os.path.join(trans_dir,trans[num_idx])
-    test_hazy_file_path = os.path.join(hazy_dir,hazys[num_idx])
-
-    print('test trans file name %s' % test_trans_file_path)
-    print('test hazy file name %s' % test_hazy_file_path)
-
-    tran_img = np.load(test_trans_file_path)/255
-    hazy_img = np.load(test_hazy_file_path)/255
-
-    # 根据还原公式进行还原并显示三张图
-    clear_img = np.zeros(hazy_img.shape)
-
-    A = _get_airlight(hazys[num_idx])
-    print('airlight value %f' % A)
-
-    # 还原
-    clear_img[:,:,0] = (hazy_img[:,:,0] - A)/tran_img + A
-    clear_img[:,:,1] = (hazy_img[:,:,1] - A)/tran_img + A
-    clear_img[:,:,2] = (hazy_img[:,:,2] - A)/tran_img + A
-
-    # show img
-    plt.subplot(1,2,1)
-    plt.imshow(hazy_img)
-    plt.subplot(1,2,2)
-    plt.imshow(clear_img)
-    plt.show()
-
+    # 保存
+    # model.save('mlp_weight.h5')
+    model.load_weights('mlp_weight.h5')
+    # 预测
+    print(model.predict(x_test))
