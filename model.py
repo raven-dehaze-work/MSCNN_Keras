@@ -4,10 +4,12 @@ MSCNN-Dehaze class
 
 import os
 import time
-
+from keras import backend as K
+import tensorflow as tf
+from keras.engine.topology import Layer
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input,BatchNormalization,Dropout
+from keras.layers import Conv2D, MaxPooling2D, UpSampling2D, Input, BatchNormalization
 from keras.layers.merge import concatenate
 from keras.optimizers import Adam, SGD
 from keras.losses import mse
@@ -42,15 +44,16 @@ class MSCNN():
         (self.coarseModel, self.fineModel) = self.build_model()
 
         # 保存回调函数
-        self.coarse_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path, 'coarse_net_{epoch:03d}-{val_loss:.4f}.h5'),
-                                           monitor='val_loss',
-                                           verbose=1, save_best_only=True, mode='min')
-        self.fine_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path,'fine_net_{epoch:03d}-{val_loss:.4f}.h5'),
+        self.coarse_ckpt = ModelCheckpoint(
+            os.path.join(self.model_dir_path, 'coarse_net_{epoch:03d}-{val_loss:.4f}.h5'),
+            monitor='val_loss',
+            verbose=1, save_best_only=True, mode='min')
+        self.fine_ckpt = ModelCheckpoint(os.path.join(self.model_dir_path, 'fine_net_{epoch:03d}-{val_loss:.4f}.h5'),
                                          monitor='val_loss',
                                          verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
         # self.optimizer = SGD(learning_rate,0.9,0.0001)
-        self.optimizer = Adam(learning_rate,decay=1e-6)
+        self.optimizer = Adam(learning_rate, decay=1e-6)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
@@ -95,21 +98,21 @@ class MSCNN():
         conv1 = Conv2D(5, (11, 11), padding='same', activation='relu', name='coarseNet/conv1')(input_img)
         pool1 = MaxPooling2D((2, 2), name='coarseNet/pool1')(conv1)
         upsample1 = UpSampling2D((2, 2), name='coarseNet/upsample1')(pool1)
-        normalize1 = BatchNormalization(axis=3,name='coarseNet/bn1')(upsample1)
-        dropout1 = Dropout(0.5,name='coarseNet/dropout1')(normalize1)
+        normalize1 = BatchNormalization(axis=3, name='coarseNet/bn1')(upsample1)
+        # dropout1 = Dropout(0.5, name='coarseNet/dropout1')(normalize1)
 
-        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(dropout1)
+        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(normalize1)
         pool2 = MaxPooling2D((2, 2), name='coarseNet/pool2')(conv2)
         upsample2 = UpSampling2D((2, 2), name='coarseNet/upsample2')(pool2)
         normalize2 = BatchNormalization(axis=3, name='coarseNet/bn2')(upsample2)
-        dropout2 = Dropout(0.5, name='coarseNet/dropout2')(normalize2)
+        # dropout2 = Dropout(0.5, name='coarseNet/dropout2')(normalize2)
 
-        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(dropout2)
+        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(normalize2)
         pool3 = MaxPooling2D((2, 2), name='coarseNet/pool3')(conv3)
         upsample3 = UpSampling2D((2, 2), name='coarseNet/upsample3')(pool3)
-        dropout3 = Dropout(0.5, name='coarseNet/dropout3')(upsample3)
+        # dropout3 = Dropout(0.5, name='coarseNet/dropout3')(upsample3)
 
-        linear = Conv2D(1, (1, 1), padding='same', activation='sigmoid', name='coarseNet/linear_comb')(dropout3)
+        linear = LinearCombine(1,name='coarseNet/linear_combine')(upsample3)
         return linear
 
     def _build_fineNet(self, input_img, coarseNet):
@@ -119,28 +122,28 @@ class MSCNN():
         :param coarseNet: coarseNet的Tensor
         :return: fineNet
         """
-        conv1 = Conv2D(4, (7, 7), padding='same', name='fineNet/conv1')(input_img)
+        # paper中的fine net 卷积kernel为4. 但经查看作者提供的源代码，第一层设置的微6
+        conv1 = Conv2D(6, (7, 7), padding='same', name='fineNet/conv1')(input_img)
         pool1 = MaxPooling2D((2, 2), name='fineNet/pool1')(conv1)
         upsample1 = UpSampling2D((2, 2), name='fineNet/upsample1')(pool1)
 
         # 级联coarseNet
         concat = concatenate([upsample1, coarseNet], axis=3, name='concat')
         normalize1 = BatchNormalization(axis=3, name='fineNet/bn1')(concat)
-        dropout1 = Dropout(0.5, name='fineNet/dropout1')(normalize1)
+        # dropout1 = Dropout(0.5, name='fineNet/dropout1')(normalize1)
 
-        conv2 = Conv2D(5, (5, 5), padding='same', name='fineNet/conv2')(dropout1)
+        conv2 = Conv2D(5, (5, 5), padding='same', name='fineNet/conv2')(normalize1)
         pool2 = MaxPooling2D((2, 2), name='fineNet/pool2')(conv2)
         upsample2 = UpSampling2D((2, 2), name='fineNet/upsample2')(pool2)
         normalize2 = BatchNormalization(axis=3, name='fineNet/bn2')(upsample2)
-        dropout2 = Dropout(0.5, name='fineNet/dropout2')(normalize2)
+        # dropout2 = Dropout(0.5, name='fineNet/dropout2')(normalize2)
 
-        conv3 = Conv2D(10, (3, 3), padding='same', name='fineNet/conv3')(dropout2)
+        conv3 = Conv2D(10, (3, 3), padding='same', name='fineNet/conv3')(normalize2)
         pool3 = MaxPooling2D((2, 2), name='fineNet/pool3')(conv3)
         upsample3 = UpSampling2D((2, 2), name='fineNet/upsample3')(pool3)
-        dropout3 = Dropout(0.5, name='fineNet/dropout3')(upsample3)
+        # dropout3 = Dropout(0.5, name='fineNet/dropout3')(upsample3)
 
-        linear = Conv2D(1, (1, 1), padding='same', activation='sigmoid', name='fineNet/comb')(dropout3)
-
+        linear = LinearCombine(1,name='fineNet/linear_combine')(upsample3)
         return linear
 
     def _load_lastest_net(self):
@@ -162,12 +165,12 @@ class MSCNN():
         # 加载出来的文件列表的最后一个即是最新的模型model
         if len(coarse_file_names) != 0:
             print('lasteset coarse net %s' % coarse_file_names[-1])
-            self.coarseModel.load_weights(os.path.join(self.model_dir_path,coarse_file_names[-1]))
+            self.coarseModel.load_weights(os.path.join(self.model_dir_path, coarse_file_names[-1]))
         else:
             print('not found coarse net weight file')
         if len(fine_file_names) != 0:
             print('lasteset fine net %s' % fine_file_names[-1])
-            self.fineModel.load_weights(os.path.join(self.model_dir_path,fine_file_names[-1]))
+            self.fineModel.load_weights(os.path.join(self.model_dir_path, fine_file_names[-1]))
         else:
             print('not found fine net weight file')
 
@@ -281,7 +284,7 @@ class MSCNN():
         fig = plt.figure()
         # 保存照片
         for idx, img in enumerate(test_out):
-            plt.imshow(np.reshape(img*255, (self.img_height, self.img_width)), cmap='gray')
+            plt.imshow(np.reshape(img * 255, (self.img_height, self.img_width)), cmap='gray')
             plt.title('trans')
 
             # save fig and  npy file
@@ -315,3 +318,33 @@ class MSCNN():
             # save fig and npy
             fig.savefig(os.path.join(self.trans_img_dir, 'image%d.png' % (idx)))
             np.save(os.path.join(self.trans_npy_dir, 'image%d.npy' % idx), img * 255)
+
+
+
+class LinearCombine(Layer):
+
+    def __init__(self, output_dim,**kwargs):
+        self.output_dim = output_dim
+        super(LinearCombine, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.kernel = self.add_weight(name='kernel',
+                                      trainable=True,
+                                      shape=(input_shape[3],),
+                                      initializer='uniform')
+        self.biases = self.add_weight(name='bias',
+                                      trainable=True,
+                                      shape=(self.output_dim,),
+                                      initializer='normal')
+        super(LinearCombine, self).build(input_shape)  # Be sure to call this at the end
+
+    def call(self, inputs, **kwargs):
+        out = K.bias_add(
+            K.sum(tf.multiply(inputs, self.kernel), axis=3),
+            self.biases
+        )
+        out = K.expand_dims(out,axis=3)
+        return K.sigmoid(out)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0],input_shape[1],input_shape[2],self.output_dim)

@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 
 # 设置超参数
 learning_rate = 1e-04
-epochs = 10
-batch_size = 80
+epochs = 150
+batch_size = 100
 
 # 设置训练用的数据集图片大小
 train_img_height = 230
