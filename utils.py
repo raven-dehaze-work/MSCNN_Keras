@@ -35,9 +35,5 @@ def load_training_data_pair():
                 print('trans %s hazy %s' % (trans_names[idx],hazy_name))
                 break
 
-    # print match pair info
     return pairs
 
-if __name__ == '__main__':
-    # 所有npy文件全是255图片
-    load_training_data_pair()

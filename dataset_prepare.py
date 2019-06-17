@@ -2,15 +2,14 @@
 """
 准备数据集合脚本
 """
-import numpy as np
-import matplotlib.pyplot as plt
-import scipy.io as sio
+
 import h5py
-import os
 from PIL import Image
-import matplotlib.pyplot as plt
 from main import *
 
+
+img_width = 256
+img_width = 256
 
 def extract_src_imgs():
     """

@@ -38,9 +38,9 @@ def load_data_generator(train_percentage, val_percentage):
                             2. 该类数据生成器
     """
     if train_percentage + val_percentage >= 1:
-        raise Exception()
+        raise Exception("train_percentage + val_percentage over 1")
 
-    # 计算数据总量t
+    # 计算数据总量
     trans_hazy_pair = utils.load_training_data_pair()
     haze_file_names = trans_hazy_pair['hazy']
     trans_file_names = trans_hazy_pair['trans']
@@ -159,13 +159,13 @@ def load_datas(train_percentage, val_percentage):
                 os.path.join(train_trans_dir, trans_file_names[idx])), 2)
 
     # 打印测试是否转化成功
-    print('train_datas shape', train_datas['haze'].shape)
-    print('val_datas shape', val_datas['haze'].shape)
-    print('test_datas shape', test_datas['haze'].shape)
+    print('train_datas haze shape', train_datas['haze'].shape)
+    print('val_datas haze shape', val_datas['haze'].shape)
+    print('test_datas haze shape', test_datas['haze'].shape)
 
-    print('train_datas shape', train_datas['trans'].shape)
-    print('val_datas shape', val_datas['trans'].shape)
-    print('test_datas shape', test_datas['trans'].shape)
+    print('train_datas trans shape', train_datas['trans'].shape)
+    print('val_datas trans shape', val_datas['trans'].shape)
+    print('test_datas trans shape', test_datas['trans'].shape)
     return (train_datas, val_datas, test_datas)
 
 
