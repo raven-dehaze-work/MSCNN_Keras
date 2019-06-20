@@ -19,3 +19,5 @@ The implemention matlab code of Single Image Dehazing via Multi-scale Convolutio
 3. [MSCNN去雾Keras实现](https://github.com/raven-dehaze-work/MSCNN_Keras)
 4. [MSCNN去雾TensorFlow实现](https://github.com/dishank-b/MSCNN-Dehazing-Tensorflow)
 5. [Dehaze-GAN TensorFlow实现](https://github.com/raven-dehaze-work/Dehaze-GAN)
+
+Corresponding blog post:https://www.ravenxrz.ink/archives/summary-3-paper-reproduction-2-mscnn-defogging-1.html

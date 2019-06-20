@@ -38,8 +38,8 @@ class MSCNN():
         self.epochs = epochs
 
         # 输入图片信息
-        self.img_height = 230
-        self.img_width = 310
+        self.img_height = 240
+        self.img_width = 320
         self.channel = 3
 
         # 建立模型
@@ -54,8 +54,8 @@ class MSCNN():
                                          monitor='val_loss',
                                          verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
-        # self.optimizer = SGD(learning_rate,0.9,0.0001)
-        self.optimizer = Adam(learning_rate, decay=1e-6)
+        self.optimizer = SGD(learning_rate,0.9,0.0005)
+        # self.optimizer = Adam(learning_rate, decay=1e-6)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
@@ -91,31 +91,6 @@ class MSCNN():
 
         return (coarseModel, fineModel)
 
-    def _build_coarseNet(self, input_img):
-        """
-        建立coarseNet
-        :param input_img: 输入图片的tensor
-        :return: coarseNet
-        """
-        conv1 = Conv2D(5, (11, 11), padding='same', activation='relu', name='coarseNet/conv1')(input_img)
-        pool1 = MaxPooling2D((2, 2), name='coarseNet/pool1')(conv1)
-        upsample1 = UpSampling2D((2, 2), name='coarseNet/upsample1')(pool1)
-        normalize1 = BatchNormalization(axis=3, name='coarseNet/bn1')(upsample1)
-        # dropout1 = Dropout(0.5, name='coarseNet/dropout1')(normalize1)
-
-        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(normalize1)
-        pool2 = MaxPooling2D((2, 2), name='coarseNet/pool2')(conv2)
-        upsample2 = UpSampling2D((2, 2), name='coarseNet/upsample2')(pool2)
-        normalize2 = BatchNormalization(axis=3, name='coarseNet/bn2')(upsample2)
-        # dropout2 = Dropout(0.5, name='coarseNet/dropout2')(normalize2)
-
-        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(normalize2)
-        pool3 = MaxPooling2D((2, 2), name='coarseNet/pool3')(conv3)
-        upsample3 = UpSampling2D((2, 2), name='coarseNet/upsample3')(pool3)
-        # dropout3 = Dropout(0.5, name='coarseNet/dropout3')(upsample3)
-
-        linear = LinearCombine(1,name='coarseNet/linear_combine')(upsample3)
-        return linear
 
     def _build_fineNet(self, input_img, coarseNet):
         """

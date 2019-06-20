@@ -21,3 +21,7 @@ Single Image Dehazing via Multi-scale Convolutional Neural Networks论文去雾�
 3. [MSCNN去雾Keras实现](https://github.com/raven-dehaze-work/MSCNN_Keras)
 4. [MSCNN去雾TensorFlow实现](https://github.com/dishank-b/MSCNN-Dehazing-Tensorflow)
 5. [Dehaze-GAN TensorFlow实现](https://github.com/raven-dehaze-work/Dehaze-GAN)
+
+
+
+对应博文:https://www.ravenxrz.ink/archives/summary-3-paper-reproduction-2-mscnn-defogging-1.html
