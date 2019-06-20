@@ -1,9 +1,8 @@
 # DeHaze_MSCNN
 Single Image Dehazing via Multi-scale Convolutional Neural Networks论文去雾代码
 
-- [English Version](<https://github.com/raven-dehaze-work/MSCNN_MATLAB/blob/master/README.md>)
-- [Chinese Version](<https://github.com/raven-dehaze-work/MSCNN_MATLAB/blob/master/README-zh.md>)
-
+- [English Version](https://github.com/raven-dehaze-work/MSCNN_Keras/blob/master/README.md)
+- [Chinese Version](https://github.com/raven-dehaze-work/MSCNN_Keras/blob/master/README-zh.md)
 
 
 ### 1. 网络结构
