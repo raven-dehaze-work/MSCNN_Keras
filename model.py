@@ -28,18 +28,16 @@ class MSCNN():
             os.mkdir(self.model_dir_path)
         if not os.path.exists(self.trans_img_dir):
             os.mkdir(self.trans_img_dir)
-        if not os.path.exists(self.trans_npy_dir):
-            os.mkdir(self.trans_npy_dir)
-        self.coarse_model_name = 'coarse_net.h5'
-        self.fine_model_name = 'fine_net.h5'
+        self.coarse_model_path = 'coarse_net.h5'
+        self.fine_model_path = 'fine_net.h5'
 
         # 设置超参数
         self.batch_size = batch_size
         self.epochs = epochs
 
         # 输入图片信息
-        self.img_height = 240
-        self.img_width = 320
+        self.img_height = 230
+        self.img_width = 310
         self.channel = 3
 
         # 建立模型
@@ -54,8 +52,8 @@ class MSCNN():
                                          monitor='val_loss',
                                          verbose=1, save_best_only=True, mode='min')
         # 设置优化器，损失函数等
-        self.optimizer = SGD(learning_rate,0.9,0.0005)
-        # self.optimizer = Adam(learning_rate, decay=1e-6)
+        # self.optimizer = SGD(learning_rate,0.9,0.0001)
+        self.optimizer = Adam(learning_rate, decay=1e-6)
         self.loss = mse
 
         self.coarseModel.compile(optimizer=self.optimizer,
@@ -73,7 +71,7 @@ class MSCNN():
         coarseNet = self._build_coarseNet(input_img)
         fineNet = self._build_fineNet(input_img, coarseNet)
 
-        # 建立coarse Model和fine Model
+        # 建立coarse Model和findModel
         coarseModel = Model(inputs=input_img, outputs=coarseNet)
         fineModel = Model(inputs=input_img, outputs=fineNet)
 
@@ -82,15 +80,40 @@ class MSCNN():
         fineModel.summary()
 
         # save model to visualize
-        if not os.path.exists(os.path.join(self.model_dir_path, self.coarse_model_name)):
-            coarseModel.save(filepath=os.path.join(self.model_dir_path, self.coarse_model_name))
+        if not os.path.exists(os.path.join(self.model_dir_path, self.coarse_model_path)):
+            coarseModel.save(filepath=os.path.join(self.model_dir_path, self.coarse_model_path))
             print('save corase net to visualize')
-        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_name)):
-            fineModel.save(filepath=os.path.join(self.model_dir_path, self.fine_model_name))
+        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
+            fineModel.save(filepath=os.path.join(self.model_dir_path, self.fine_model_path))
             print('save fine net to visualize')
 
         return (coarseModel, fineModel)
 
+    def _build_coarseNet(self, input_img):
+        """
+        建立coarseNet
+        :param input_img: 输入图片的tensor
+        :return: coarseNet
+        """
+        conv1 = Conv2D(5, (11, 11), padding='same', activation='relu', name='coarseNet/conv1')(input_img)
+        pool1 = MaxPooling2D((2, 2), name='coarseNet/pool1')(conv1)
+        upsample1 = UpSampling2D((2, 2), name='coarseNet/upsample1')(pool1)
+        normalize1 = BatchNormalization(axis=3, name='coarseNet/bn1')(upsample1)
+        # dropout1 = Dropout(0.5, name='coarseNet/dropout1')(normalize1)
+
+        conv2 = Conv2D(5, (9, 9), padding='same', activation='relu', name='coarseNet/conv2')(normalize1)
+        pool2 = MaxPooling2D((2, 2), name='coarseNet/pool2')(conv2)
+        upsample2 = UpSampling2D((2, 2), name='coarseNet/upsample2')(pool2)
+        normalize2 = BatchNormalization(axis=3, name='coarseNet/bn2')(upsample2)
+        # dropout2 = Dropout(0.5, name='coarseNet/dropout2')(normalize2)
+
+        conv3 = Conv2D(10, (7, 7), padding='same', activation='relu', name='coarseNet/conv3')(normalize2)
+        pool3 = MaxPooling2D((2, 2), name='coarseNet/pool3')(conv3)
+        upsample3 = UpSampling2D((2, 2), name='coarseNet/upsample3')(pool3)
+        # dropout3 = Dropout(0.5, name='coarseNet/dropout3')(upsample3)
+
+        linear = LinearCombine(1,name='coarseNet/linear_combine')(upsample3)
+        return linear
 
     def _build_fineNet(self, input_img, coarseNet):
         """
@@ -99,7 +122,7 @@ class MSCNN():
         :param coarseNet: coarseNet的Tensor
         :return: fineNet
         """
-        # paper中的fine net 卷积kernel为4. 但经查看作者提供的源代码，第一层设置的6
+        # paper中的fine net 卷积kernel为4. 但经查看作者提供的源代码，第一层设置的微6
         conv1 = Conv2D(6, (7, 7), padding='same', name='fineNet/conv1')(input_img)
         pool1 = MaxPooling2D((2, 2), name='fineNet/pool1')(conv1)
         upsample1 = UpSampling2D((2, 2), name='fineNet/upsample1')(pool1)
@@ -154,7 +177,7 @@ class MSCNN():
     def train_on_generator(self, train_datas, val_datas):
         """
         使用生成器来训练模型--适合大数据
-        :param train_datas: 字典类型的训练数据。包含训练数据总量和训练生成器。键为：'nums'和'generator'
+        :param train_datas: 字典类型的训练数据。包含训练数据总量和训练生成器。（键为：'nums'和'generator'
         :param val_datas: 字典类型的验证数据。包含验证数据总量和验证生成器
         :return: 无
         """
@@ -162,7 +185,7 @@ class MSCNN():
         train_generator = train_datas['generator']
 
         val_num = val_datas['nums']
-        val_generator = val_datas['generator']
+        val_genernator = val_datas['generator']
 
         # 加载模型
         self._load_lastest_net()
@@ -172,14 +195,14 @@ class MSCNN():
         coarse_history = self.coarseModel.fit_generator(generator=train_generator,
                                                         steps_per_epoch=int(train_num / self.batch_size),
                                                         epochs=self.epochs,
-                                                        validation_data=val_generator,
+                                                        validation_data=val_genernator,
                                                         validation_steps=max(int(val_num / self.batch_size), 1),
                                                         callbacks=[self.coarse_ckpt])
         t2 = time.time()
         fine_history = self.fineModel.fit_generator(generator=train_generator,
                                                     steps_per_epoch=int(train_num / self.batch_size),
                                                     epochs=self.epochs,
-                                                    validation_data=val_generator,
+                                                    validation_data=val_genernator,
                                                     validation_steps=max(int(val_num / self.batch_size), 1),
                                                     callbacks=[self.fine_ckpt])
         t3 = time.time()
@@ -244,8 +267,8 @@ class MSCNN():
 
             if pre_best_val_loss < val_fine_loss:
                 # 保存当前模型
-                self.coarseModel.save(os.path.join(self.model_dir_path, self.coarse_model_name))
-                self.fineModel.save(os.path.join(self.model_dir_path, self.fine_model_name))
+                self.coarseModel.save(os.path.join(self.model_dir_path, self.coarse_model_path))
+                self.fineModel.save(os.path.join(self.model_dir_path, self.fine_model_path))
 
     def test_on_generator(self, test_datas):
         """
@@ -275,9 +298,9 @@ class MSCNN():
         :return: 无
         """
         # 加载模型
-        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_name)):
+        if not os.path.exists(os.path.join(self.model_dir_path, self.fine_model_path)):
             raise FileNotFoundError('model file not found, did you train model before?')
-        self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_name))
+        self.fineModel.load_weights(os.path.join(self.model_dir_path, self.fine_model_path))
         test_out = self.fineModel.predict(test_in['haze'])
 
         fig = plt.figure()
@@ -299,9 +322,7 @@ class MSCNN():
 
 
 class LinearCombine(Layer):
-    """
-    paper 中的线性结合层
-    """
+
     def __init__(self, output_dim,**kwargs):
         self.output_dim = output_dim
         super(LinearCombine, self).__init__(**kwargs)
