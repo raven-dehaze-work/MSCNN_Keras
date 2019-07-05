@@ -1,5 +1,5 @@
 # DeHaze_MSCNN
-The implemention matlab code of Single Image Dehazing via Multi-scale Convolutional Neural Networks .
+The implemention code of Single Image Dehazing via Multi-scale Convolutional Neural Networks .
 
 - [English Version](https://github.com/raven-dehaze-work/MSCNN_Keras/blob/master/README.md)
 - [Chinese Version](https://github.com/raven-dehaze-work/MSCNN_Keras/blob/master/README-zh.md)
